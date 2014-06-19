@@ -3,21 +3,13 @@ var net = require("net");
 
 var GameMaster = require("./game");
 
-
-///////////////////////////////////////////////////////////////////////////////
-// server
-///////////////////////////////////////////////////////////////////////////////
 var GameServer = module.exports = function (port) {
 	this.games = {};
 	
 	this.stream = new net.Server()
-		.on("listening", this.start.bind(this, port))
+		.on("listening", console.log.bind(console, "Serving liar's dice on port", port + "!"))
 		.on("connection", this.accept.bind(this))
 		.listen(port);
-};
-
-GameServer.prototype.start = function (port) {
-	console.log("Serving liar's dice on port", port + "!")
 };
 
 GameServer.prototype.stop = function () {
@@ -31,6 +23,8 @@ GameServer.prototype.stop = function () {
 };
 
 GameServer.prototype.accept = function (socket) {
+	var emit = this.emit.bind(this, socket);
+	
 	socket.once("data", function (player) {
 		socket.setTimeout(0);
 		
@@ -40,7 +34,7 @@ GameServer.prototype.accept = function (socket) {
 			if (player.name && player.game) {
 				if (typeof player.game === "string") {
 					if (this.games[player.game]) {
-						player = this.games[player.game].join(player.name);
+						player = this.games[player.game].join(player.name, emit);
 					} else {
 						throw new Error("invalid game key");
 					}
@@ -50,45 +44,42 @@ GameServer.prototype.accept = function (socket) {
 					
 					this.games[gkey] = gcls;
 					
-					player = gcls.join(player.name);
+					player = gcls.join(player.name, emit);
 				} else {
 					throw new Error("invalid game parameters");
 				}
 			} else {
 				throw new Error("invalid join request");
 			}
-			
-			GameClient(socket, player);
 		} catch (err) {
-			socket.end(JSON.stringify({ type: "error", message: err.message }));
+			emit({ type: "error", message: err.message });
+			emit({ type: "end" });
+			return;
 		}
+		
+		socket.on("data", function (data) {
+			try {
+				player(JSON.parse(data));
+			} catch (err) {
+				emit({ type: "error", message: err.message });
+			}
+		}).on("close", function () {
+			player({ type: "leave" });
+		});
 	}.bind(this)).setTimeout(1000, function () {
-		socket.end(JSON.stringify({ type: "error", message: "timeout" }));
+		emit({ type: "error", message: "timeout" });
+		emit({ type: "end" });
 	});
 };
 
-
-///////////////////////////////////////////////////////////////////////////////
-// client
-///////////////////////////////////////////////////////////////////////////////
-var GameClient = function (socket, player) {
-	socket
-		.on("data", function (data) {
-			try {
-				player.handle(JSON.parse(data));
-			} catch (err) {
-				socket.write(JSON.stringify({ type: "error", message: err.message }));
-			}
-		})
-		.on("close", function () {
-			player.handle({ type: "leave" });
-		});
+GameServer.prototype.emit = function (socket, event) {
+	if (!socket.writable) {
+		return;
+	}
 	
-	player.emit = function (event) {
-		socket.write(JSON.stringify(event));
-		
-		if (event.type === "end") {
-			socket.end();
-		}
-	};
+	socket.write(JSON.stringify(event));
+	
+	if (event.type === "end") {
+		socket.end();
+	}
 };
