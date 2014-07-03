@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"log"
 	"net"
@@ -55,11 +56,38 @@ func (self *GameServer) Stop() {
 }
 
 func (self *GameServer) Accept(socket *net.Conn) {
-
+	emit := func(event map[string]string) {
+		self.Emit(socket, event)
+	}
+	
+	scanner := bufio.NewScanner(*socket)
+	
+	scanner.Scan()
+	player := map[string]interface{}{}
+	json.Unmarshal([]byte(scanner.Text()), &player)
+	
+	if player["name"] && player["game"] {
+		
+	}
+	
+	log.Println(player)
+	
+	for scanner.Scan() {
+		log.Println(scanner.Text())
+		
+		//if nil {
+			//player(map[string]string{"type":"leave"})
+		//}
+	}
+	
+	emit(map[string]string{"type":"leave"})
 }
 
 func (self *GameServer) Emit(socket *net.Conn, event map[string]string) {
-	data, _ := json.Marshal(event)
+	data, err := json.Marshal(event)
+	if err != nil {
+		panic(err)
+	}
 
 	(*socket).Write(data)
 

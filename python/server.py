@@ -1,9 +1,10 @@
 import asyncio
-import codecs
 import json
-import os
+import random
 
 from game import GameMaster
+
+random = random.SystemRandom()
 
 class GameServer:
 	def __init__(self, loop, port):
@@ -34,12 +35,12 @@ class GameServer:
 			
 			if type(player) is dict and player["name"] and player["game"]:
 				if type(player["game"]) is str:
-					if self.games[player["game"]]:
+					if self.games[player["game"]] and not self.games[player["game"]].playersFull:
 						player = self.games[player["game"]].join(player["name"], emit)
 					else:
 						raise Exception("invalid game key")
 				elif player["game"]["players"] >= 2 and player["game"]["dice"] >= 2:
-					gkey = codecs.encode(os.urandom(8), "hex").decode()
+					gkey = hex(random.getrandbits(64))[2:]
 					gcls = GameMaster(player["game"]["players"], player["game"]["dice"])
 					
 					self.games[gkey] = gcls
@@ -50,7 +51,7 @@ class GameServer:
 			else:
 				raise Exception("invalid join request")
 		except Exception as err:
-			emit(type="error", message=str(err) or "timeout")
+			emit(type="error", error=str(err) or "timeout")
 			emit(type="end")
 			return
 		
@@ -64,7 +65,7 @@ class GameServer:
 			try:
 				player(**json.loads(data.decode()))
 			except Exception as err:
-				emit(type="error", message=str(err))
+				emit(type="error", error=str(err))
 	
 	def emit(self, writer, **event):
 		writer.write(json.dumps(event).encode())

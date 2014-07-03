@@ -33,7 +33,7 @@ GameServer.prototype.accept = function (socket) {
 			
 			if (player.name && player.game) {
 				if (typeof player.game === "string") {
-					if (this.games[player.game]) {
+					if (this.games[player.game] && !this.games[player.game].playersFull) {
 						player = this.games[player.game].join(player.name, emit);
 					} else {
 						throw new Error("invalid game key");
@@ -52,7 +52,7 @@ GameServer.prototype.accept = function (socket) {
 				throw new Error("invalid join request");
 			}
 		} catch (err) {
-			emit({ type: "error", message: err.message });
+			emit({ type: "error", error: err.message });
 			emit({ type: "end" });
 			return;
 		}
@@ -61,13 +61,13 @@ GameServer.prototype.accept = function (socket) {
 			try {
 				player(JSON.parse(data));
 			} catch (err) {
-				emit({ type: "error", message: err.message });
+				emit({ type: "error", error: err.message });
 			}
 		}).on("close", function () {
 			player({ type: "leave" });
 		});
 	}.bind(this)).setTimeout(1000, function () {
-		emit({ type: "error", message: "timeout" });
+		emit({ type: "error", error: "timeout" });
 		emit({ type: "end" });
 	});
 };
